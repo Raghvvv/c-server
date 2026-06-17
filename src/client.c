@@ -10,7 +10,7 @@
 int main(){
     int client_fd,status;
     struct sockaddr_in address;
-    char *hi="hi from client";
+    char *hi="hi from client\n";
     char buffer[1024]={0};
 
     address.sin_family=AF_INET;
@@ -38,12 +38,28 @@ int main(){
         return -1;
     }
 
-    send(client_fd,hi,strlen(hi),0);
-    printf("messege sent!\n");
+    char ch='y';
+    
+    while(ch=='y'){
+        ssize_t readval=read(client_fd,buffer,sizeof(buffer)-1);
+        if(readval<0)break;
+        buffer[readval]='\0';
+        printf("%s",buffer);
+        printf("type messege\n");
+        fgets(buffer,sizeof(buffer),stdin);
+        send(client_fd,buffer,strlen(buffer),0);
+        printf("more? y||n \n");
+        char choice[10];
 
-    read(client_fd,&buffer,1024-1);
-    printf("%s",buffer);
+        fgets(choice, sizeof(choice), stdin);
+
+        ch = choice[0];
+
+    }
+
+    
     close(client_fd);
+    printf("connection closed!\n");
 
     return 0;
 }

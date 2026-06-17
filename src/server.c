@@ -12,8 +12,9 @@ int main(){
 
     int sock_fd,new_socket;
     struct sockaddr_in address;
-    char *ptr="hello from the server";
+    char *ptr="hello from the server\n";
     int buffer[1024]={0};
+    int valread;
     
     //configure the address struct:
     
@@ -44,25 +45,30 @@ int main(){
     
     //accept:
     socklen_t adderlen=sizeof(address);
-    printf("hi\n");
+    
     if((new_socket=accept(sock_fd,(struct sockaddr*)&address,&adderlen))<0){
         perror("cant accept more");
-        printf("hi2\n");
+        
         exit(EXIT_FAILURE);
         
     }
-    printf("hi3\n");
+    
 
-
-    read(new_socket,&buffer,1024-1);
-
-    printf("%s",buffer);
-
-    printf("hi4\n");
-
+    
+    
     send(new_socket,ptr,strlen(ptr),0);
+    
+    while((valread=read(new_socket,buffer,sizeof(buffer)-1))>0){
+        buffer[valread]='\0';
+        printf("%s",buffer);
+        send(new_socket,"messege recieved\n",strlen("messege recieved\n"),0);
+        
+    }
+    
 
-    printf("messege from server sent!\n");
+
+    
+
 
     close(new_socket);
     close(sock_fd);
