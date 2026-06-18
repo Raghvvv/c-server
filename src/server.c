@@ -13,7 +13,7 @@ int main(){
     int sock_fd,new_socket;
     struct sockaddr_in address;
     char *ptr="hello from the server\n";
-    int buffer[1024]={0};
+    int buffer[4096]={0};
     int valread;
     
     //configure the address struct:
@@ -56,14 +56,27 @@ int main(){
 
     
     
-    send(new_socket,ptr,strlen(ptr),0);
-    
-    while((valread=read(new_socket,buffer,sizeof(buffer)-1))>0){
-        buffer[valread]='\0';
-        printf("%s",buffer);
-        send(new_socket,"messege recieved\n",strlen("messege recieved\n"),0);
-        
-    }
+    // send(new_socket,ptr,strlen(ptr),0);
+
+    ssize_t byte=read(new_socket,buffer,sizeof(buffer)-1);
+    buffer[byte]='\0';
+
+    printf("%s",&buffer);
+    char html[8192];
+    const char *header =
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "\r\n";
+    FILE*fptr=fopen("static/index.html","r");
+    ssize_t bytes_read=fread(html,1,sizeof(html),fptr);
+    html[bytes_read]='\0';
+    // printf("%s",html);
+    send(new_socket,header,strlen(header),0);
+    send(new_socket,html,strlen(html),0);
+    fclose(fptr);
+
+
+
     
 
 
