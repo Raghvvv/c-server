@@ -3,6 +3,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<sys/socket.h>
+#include<sys/stat.h>
 #include<unistd.h>
 
 
@@ -76,16 +77,30 @@ int main(){
         }
         
         char filepath[100];
-
+        char content[20];
         //get the filepath:
-
+        char *ext=strrchr(route,'.');
         if(strcmp(route,"/")==0){
             strcpy(filepath,"static/index.html");
+            strcpy(content,"html");
+        }
+        else if(ext&&strcmp(ext,".css")==0){
+            sprintf(filepath,"static%s",route);
+            strcpy(content,"text/css");
+        }
+         else if(ext&&strcmp(ext,".png")==0){
+            sprintf(filepath,"static%s",route);
+            strcpy(content,"img/png");
+        }
+         else if(ext&&strcmp(ext,".jpeg")==0){
+            sprintf(filepath,"static%s",route);
+            strcpy(content,"img/jpeg");
         }
         else{
             sprintf(filepath,"static%s.html",route);
+            strcpy(content,"text/html");
         }
-
+        printf("%s\n",filepath);
         char html[8192];
         char header[512];
         
@@ -102,8 +117,7 @@ int main(){
 
             code = status[1];
             fptr=fopen("static/error404.html","r");
-            // ssize_t byte_read=fread(html,1,sizeof(html)-1,fptr);
-            // html[byte_read]='\0';
+            
             
         }
         
@@ -111,32 +125,43 @@ int main(){
             
             code=status[0];
         }
-        ssize_t byte_read=fread(html,1,sizeof(html)-1,fptr);
-        html[byte_read]='\0';
-        
-        //create the header:
+        struct stat file_stat;
+        int content_len;
+        if(stat(filepath,&file_stat)==0){
+            content_len=file_stat.st_size;
+        }
+        else{
+            perror("error reading file length\n");
+            exit(EXIT_FAILURE);
+        }
         sprintf(
             header,
             "HTTP/1.1 %s\r\n"
-            "Content-Type: text/html\r\n"
+            "Content-Type: %s\r\n"
             "Content-Length: %zu\r\n"
             "\r\n",
             code,
-            strlen(html)
+            content,
+            // strlen(html)
+            content_len
         );
-        // printf("%s",html);
-        // printf("%s",header);
-
         send(new_socket,header,strlen(header),0);
-        send(new_socket,html,strlen(html),0);
+        ssize_t byte_read;
+        while((byte_read=fread(html,1,sizeof(html),fptr))>0)
+        {      
+            //create the header:
+           
+            send(new_socket,html,byte_read,0);
+        }
 
         fclose(fptr);
 
         close(new_socket);
         printf("server still up");
     }
-        printf("server down");
-        close(sock_fd);
 
-        return 0;
+    printf("server down");
+    close(sock_fd);
+
+    return 0;
 }
