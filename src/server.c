@@ -5,61 +5,24 @@
 #include<sys/socket.h>
 #include<sys/stat.h>
 #include<unistd.h>
+#include<pthread.h>
 
 
 #define PORT 8080
-
-int main(){
-
-    int sock_fd,new_socket;
-    struct sockaddr_in address;
-    char *ptr="hello from the server\n";
+void* serve_client(void* _socket)
+{   
+    printf("Thread %lu started\n",
+       (unsigned long)pthread_self());
+    // sleep(5);
     char buffer[4096]={0};
-    int valread;
-    
-    //configure the address struct:
-    
-    address.sin_family=AF_INET;
-    address.sin_port=htons(PORT);
-    address.sin_addr.s_addr=INADDR_ANY;
-    
-    //create a socket:
-
-    if((sock_fd=socket(AF_INET,SOCK_STREAM,0))<0){
-        perror("coud not create socket");
-        exit(EXIT_FAILURE);
-    }
-    
-    //bind the socket:
-    
-    if(bind(sock_fd,(struct sockaddr*)&address,sizeof(address))<0){
-        perror("problem in binding stage");
-        exit(EXIT_FAILURE);
-    }
-    
-    //listen:
-    
-    if((listen(sock_fd,4))<0){
-        perror("error in listen");
-        exit(EXIT_FAILURE);
-    }
-    while(1)
-    {
-        //accept:
-        socklen_t adderlen=sizeof(address);
-        
-        if((new_socket=accept(sock_fd,(struct sockaddr*)&address,&adderlen))<0){
-            perror("cant accept more");
-            exit(EXIT_FAILURE);
-            
-        }
-
-        
-        ssize_t byte=read(new_socket,buffer,sizeof(buffer)-1);
+    int new_socket=*((int*)_socket);
+    free(_socket);
+    ssize_t byte=read(new_socket,buffer,sizeof(buffer)-1);
 
         if(byte <= 0){
             perror("read");
-            close(new_socket);  
+            close(new_socket);
+            return NULL;  
 
         }
         buffer[byte]='\0';
@@ -73,7 +36,7 @@ int main(){
         if(sscanf(buffer,"%s %s",method,route)<=0){
 
             fprintf(stderr,"error in parsing!\n");
-            exit(EXIT_FAILURE);
+            // exit(EXIT_FAILURE);
         }
         
         char filepath[100];
@@ -126,24 +89,26 @@ int main(){
             code=status[0];
         }
         struct stat file_stat;
-        int content_len;
+        int content_len=0;
         if(stat(filepath,&file_stat)==0){
             content_len=file_stat.st_size;
         }
         else{
             perror("error reading file length\n");
-            exit(EXIT_FAILURE);
+            stat("static/error404.html",&file_stat);
+            content_len=file_stat.st_size;
+            // exit(EXIT_FAILURE);
         }
         sprintf(
             header,
             "HTTP/1.1 %s\r\n"
             "Content-Type: %s\r\n"
-            "Content-Length: %zu\r\n"
+            "Content-Length: %lld\r\n"
             "\r\n",
             code,
             content,
             // strlen(html)
-            content_len
+            (long long)content_len
         );
         send(new_socket,header,strlen(header),0);
         ssize_t byte_read;
@@ -154,13 +119,85 @@ int main(){
             send(new_socket,html,byte_read,0);
         }
 
+        printf("Thread %lu finished\n",
+       (unsigned long)pthread_self());
+
         fclose(fptr);
 
         close(new_socket);
-        printf("server still up");
+
+        return NULL;
+        
     }
 
-    printf("server down");
+int main(){
+
+    int sock_fd,new_socket;
+    struct sockaddr_in address;
+    char *ptr="hello from the server\n";
+    
+    int valread;
+    
+    //configure the address struct:
+    
+    address.sin_family=AF_INET;
+    address.sin_port=htons(PORT);
+    address.sin_addr.s_addr=INADDR_ANY;
+    
+    //create a socket:
+
+    if((sock_fd=socket(AF_INET,SOCK_STREAM,0))<0){
+        perror("coud not create socket");
+        exit(EXIT_FAILURE);
+    }
+    
+    //bind the socket:
+    
+    if(bind(sock_fd,(struct sockaddr*)&address,sizeof(address))<0){
+        perror("problem in binding stage");
+        exit(EXIT_FAILURE);
+    }
+    
+    //listen:
+    
+    if((listen(sock_fd,4))<0){
+        perror("error in listen");
+        exit(EXIT_FAILURE);
+    }
+    
+    pthread_t tid;
+    
+    // while(1)
+    while(1)
+    {
+        //accept:
+        socklen_t adderlen=sizeof(address);
+        
+        if((new_socket=accept(sock_fd,(struct sockaddr*)&address,&adderlen))<0){
+            perror("cant accept more");
+            exit(EXIT_FAILURE);
+            
+        }
+
+        int*socket=(void*)malloc(sizeof(int));
+        *socket=new_socket;
+
+        
+        pthread_create(&tid,NULL,serve_client,socket);
+        pthread_detach(tid);
+        
+
+
+
+
+        
+        // serve_client(socket);
+        
+        
+        printf("server still up\n");
+    }
+
+    printf("server down\n");
     close(sock_fd);
 
     return 0;
