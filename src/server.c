@@ -6,23 +6,24 @@
 #include<sys/stat.h>
 #include<unistd.h>
 #include<pthread.h>
+#include"queue.h"
 
 
 #define PORT 8080
-void* serve_client(void* _socket)
-{   
+void serve_client(int socket)
+{   sleep(3);
     printf("Thread %lu started\n",
        (unsigned long)pthread_self());
     // sleep(5);
     char buffer[4096]={0};
-    int new_socket=*((int*)_socket);
-    free(_socket);
+    int new_socket=socket;
+    // free(_socket);
     ssize_t byte=read(new_socket,buffer,sizeof(buffer)-1);
 
         if(byte <= 0){
             perror("read");
             close(new_socket);
-            return NULL;  
+            return;  
 
         }
         buffer[byte]='\0';
@@ -126,9 +127,20 @@ void* serve_client(void* _socket)
 
         close(new_socket);
 
-        return NULL;
+        return;
         
+}
+
+
+void * worker(void*arg){
+    Myqueue *queue = (Myqueue *)arg;
+    while(1){
+        int socket=dequeue(arg);
+        if(socket==-1)continue;
+        serve_client(socket);
     }
+    return NULL;
+}
 
 int main(){
 
@@ -166,35 +178,38 @@ int main(){
     }
     
     pthread_t tid;
+
+    Myqueue* queue=queueInit(64); 
+
+    pthread_create(&tid,NULL,worker,(void*)queue);
+    pthread_detach(tid);
+    pthread_create(&tid,NULL,worker,(void*)queue);
+    pthread_detach(tid);
+    pthread_create(&tid,NULL,worker,(void*)queue);
+    pthread_detach(tid);
+    pthread_create(&tid,NULL,worker,(void*)queue);
+    pthread_detach(tid);
+    
     
     // while(1)
     while(1)
     {
-        //accept:
         socklen_t adderlen=sizeof(address);
         
+        //accept:
         if((new_socket=accept(sock_fd,(struct sockaddr*)&address,&adderlen))<0){
             perror("cant accept more");
             exit(EXIT_FAILURE);
             
         }
 
-        int*socket=(void*)malloc(sizeof(int));
-        *socket=new_socket;
-
-        
-        pthread_create(&tid,NULL,serve_client,socket);
-        pthread_detach(tid);
+        enqueue(queue,new_socket);
         
 
-
-
-
-        
-        // serve_client(socket);
-        
-        
         printf("server still up\n");
+
+        // int*socket=(void*)malloc(sizeof(int));  
+        // *socket=new_socket; 
     }
 
     printf("server down\n");
