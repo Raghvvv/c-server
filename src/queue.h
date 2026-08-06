@@ -11,6 +11,7 @@ typedef struct{
     int front;
     int back;
     pthread_mutex_t lock;
+    pthread_cond_t not_empty;
     
 } Myqueue;
 
@@ -21,5 +22,6 @@ void queueFree(Myqueue*obj);
 //core functions:
 void enqueue(Myqueue*obj,int value);
 int dequeue(Myqueue*obj);
+
 
 #endif

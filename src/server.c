@@ -136,7 +136,7 @@ void * worker(void*arg){
     Myqueue *queue = (Myqueue *)arg;
     while(1){
         int socket=dequeue(arg);
-        if(socket==-1)continue;
+        // if(socket==-1)continue;
         serve_client(socket);
     }
     return NULL;

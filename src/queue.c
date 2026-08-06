@@ -15,6 +15,8 @@ Myqueue* queueInit(int k){
     obj->back=-1;
     obj->arr=(int*)malloc(k*sizeof(int));
     pthread_mutex_init(&obj->lock,NULL);
+    pthread_cond_init(&obj->not_empty,NULL);
+
     return obj;
 }
 static bool isFull(Myqueue*obj){
@@ -33,16 +35,22 @@ void enqueue(Myqueue*obj,int value){
     obj->back=insertIdx;
     obj->arr[obj->back]=value;
     obj->size++;
+    pthread_cond_signal(&obj->not_empty);
     pthread_mutex_unlock(&obj->lock);
 
 
 }
 int dequeue(Myqueue*obj){
     pthread_mutex_lock(&obj->lock);
-    if(isEmpty(obj)){
-        pthread_mutex_unlock(&obj->lock);
-        return -1;
+
+    while(isEmpty(obj)){
+        pthread_cond_wait(&obj->not_empty,&obj->lock);
+
     }
+    // if(isEmpty(obj)){
+    //     pthread_mutex_unlock(&obj->lock);
+    //     return -1;
+    // }
     int fd=obj->arr[obj->front];
     obj->front=(obj->front+1)%(obj->capacity);
     obj->size--;
@@ -53,6 +61,7 @@ int dequeue(Myqueue*obj){
 
 
 void queueFree(Myqueue*obj){
+    pthread_cond_destroy(&obj->not_empty);
     pthread_mutex_destroy(&obj->lock);
     free(obj->arr);
     free(obj);
