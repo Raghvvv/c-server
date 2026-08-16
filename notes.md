@@ -926,3 +926,209 @@ Investigation:
 
 Lesson:
 The root cause wasn't pthreads—it was test scaffolding (`i < 3`) left in the main server loop. When debugging, isolate the smallest change that introduced the regression instead of assuming the new technology is at fault.
+
+
+# Session Notes - Thread Pool Architecture
+
+## Goal
+
+Replace the thread-per-request model with a fixed-size thread pool to improve scalability and eliminate unbounded thread creation.
+
+---
+
+## Major Architectural Change
+
+### Before
+
+accept()
+
+↓
+
+pthread_create()
+
+↓
+
+serve_client()
+
+↓
+
+Thread exits
+
+Every incoming client created a brand new OS thread.
+
+Problems:
+- Expensive thread creation
+- Unbounded number of threads
+- High scheduler overhead
+- Does not scale under heavy load
+
+---
+
+### After
+
+Program Starts
+
+↓
+
+Create 4 Worker Threads
+
+↓
+
+Main Thread:
+accept()
+enqueue(client_fd)
+
+↓
+
+Workers:
+dequeue()
+serve_client(client_fd)
+
+Workers are long-lived and continuously process jobs from the shared queue.
+
+---
+
+## Producer-Consumer Pattern
+
+Producer:
+- Main thread
+- Accepts new TCP connections
+- Enqueues client sockets
+
+Consumers:
+- Worker threads
+- Dequeue sockets
+- Process HTTP requests
+
+Shared Resource:
+- Circular work queue
+
+---
+
+## Queue Design
+
+Implemented a bounded circular queue.
+
+Public API:
+- queueInit()
+- enqueue()
+- dequeue()
+- queueFree()
+
+Internal Helpers:
+- isEmpty()
+- isFull()
+
+Design decision:
+Internal helper functions were marked `static` to hide implementation details.
+
+---
+
+## Thread Safety
+
+Added a mutex inside the queue structure.
+
+Reason:
+
+Instead of requiring every caller to lock manually,
+
+```
+lock();
+enqueue();
+unlock();
+```
+
+the queue manages its own synchronization internally.
+
+This keeps the API clean and prevents misuse.
+
+---
+
+## Important OS Concepts
+
+### Thread Pool
+
+Worker threads are created once during server startup.
+
+Each worker repeatedly:
+
+- waits for work
+- processes client
+- returns to waiting
+
+instead of exiting.
+
+---
+
+### Detached Threads
+
+Previously:
+
+Every request created a detached thread.
+
+Learned that:
+
+- `pthread_detach()` DOES NOT terminate a thread.
+- It only transfers cleanup responsibility to the pthread runtime.
+- Detached threads must still terminate naturally.
+
+---
+
+### pthread_t
+
+A `pthread_t` variable is only a handle.
+
+Overwriting the variable does NOT destroy previously created threads.
+
+After detaching a thread, its ID no longer needs to be stored.
+
+---
+
+### Critical Sections
+
+The queue mutex protects only:
+
+- front
+- back
+- size
+- array modifications
+
+`serve_client()` intentionally executes outside the lock to maximize concurrency.
+
+---
+
+## Remaining Limitation
+
+Workers currently busy-wait when the queue is empty.
+
+```
+while (1)
+{
+    dequeue();
+
+    if (-1)
+        continue;
+}
+```
+
+Correct but inefficient.
+
+Next step:
+Replace busy waiting using condition variables.
+
+---
+
+## Interview Talking Points
+
+- Difference between thread-per-request and thread pool servers.
+- Producer-consumer architecture.
+- Why bounded queues are useful.
+- Why mutexes belong inside the queue abstraction.
+- Difference between detached and joinable threads.
+- Difference between blocking mutexes and spinlocks.
+- Why this improves scalability but is not yet a complete C10K solution.
+
+## Git Milestones
+
+- feat(queue): implement mutex-protected circular work queue
+- feat(threadpool): replace thread-per-request with worker pool
